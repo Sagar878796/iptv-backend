@@ -7,23 +7,25 @@ const PORT = process.env.PORT || 3000;
 
 // ===== CONFIG =====
 const config = {
-  host: "http://4k.spicetv.cc/stalker_portal/c/",
+  host: "http://4k.spicetv.cc/stalker_portal/", // FIXED
   mac: "00:1A:79:00:2C:D8",
   serial: "061A842DFD8AA25AA9184BAB968565D2E8831804C89956DA707F8396F7D4BBDB",
   device1: "61A63207AA03F",
   device2: "061A842DFD8AA25AA9184BAB968565D2E8831804C89956DA707F8396F7D4BBDB"
 };
 
-// ===== SIGNATURE GENERATOR =====
+// ===== SIGNATURE =====
 function generateSignature() {
-  const combined = config.mac + config.serial + config.device1;
-  return crypto.createHash("sha256").update(combined).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(config.mac + config.serial + config.device1)
+    .digest("hex");
 }
 
-// ===== COMMON HEADERS =====
+// ===== HEADERS =====
 function getHeaders(token = "") {
   return {
-    "User-Agent": "Mozilla/5.0 (QtEmbedded; U; Linux; C) AppleWebKit/533.3",
+    "User-Agent": "Mozilla/5.0 (QtEmbedded; U; Linux; C)",
     "X-User-Agent": "Model: MAG250; Link: Ethernet",
     "Cookie": `mac=${config.mac}; stb_lang=en; timezone=Asia/Kolkata`,
     "Authorization": token ? `Bearer ${token}` : "",
@@ -35,49 +37,83 @@ function getHeaders(token = "") {
 
 // ===== HOME =====
 app.get("/", (req, res) => {
-  res.send("🚀 IPTV Backend Running with Device ID");
+  res.send("🚀 IPTV Server Running");
 });
 
-// ===== PLAYLIST API =====
+// ===== PLAYLIST =====
 app.get("/playlist", async (req, res) => {
   try {
-    // Step 1: Handshake
+    console.log("🔄 Generating playlist...");
+
+    // 1️⃣ Handshake
     const handshake = await axios.get(
-      `${config.host}/portal.php?type=stb&action=handshake&token=&prehash=false&JsHttpRequest=1-xml`,
+      `${config.host}portal.php?type=stb&action=handshake&JsHttpRequest=1-xml`,
       { headers: getHeaders() }
     );
 
+    if (!handshake.data?.js?.token) {
+      throw new Error("Handshake failed (MAC invalid / blocked)");
+    }
+
     const token = handshake.data.js.token;
+    console.log("✅ Token OK");
 
-    // Step 2: Profile (IMPORTANT)
+    // 2️⃣ Profile
     await axios.get(
-      `${config.host}/portal.php?type=stb&action=get_profile&hd=1&ver=ImageDescription:0.2.18-r23-pub-250;ImageDate:Thu Sep 13 11:31:16 EEST 2018;PORTAL version:5.5.0;API Version:JS API version:343;STB API version:146;Player Engine version:0x58c&num_banks=2&sn=${config.serial}&device_id=${config.device1}&device_id2=${config.device2}&signature=${generateSignature()}&auth_second_step=1&hw_version=1.7-BD-00&JsHttpRequest=1-xml`,
+      `${config.host}portal.php?type=stb&action=get_profile&sn=${config.serial}&device_id=${config.device1}&device_id2=${config.device2}&signature=${generateSignature()}&JsHttpRequest=1-xml`,
       { headers: getHeaders(token) }
     );
 
-    // Step 3: Channels
-    const channels = await axios.get(
-      `${config.host}/portal.php?type=itv&action=get_all_channels&force_ch_link_check=&JsHttpRequest=1-xml`,
+    console.log("✅ Profile OK");
+
+    // 3️⃣ Channels
+    const channelsRes = await axios.get(
+      `${config.host}portal.php?type=itv&action=get_all_channels&JsHttpRequest=1-xml`,
       { headers: getHeaders(token) }
     );
+
+    const channels = channelsRes.data?.js?.data;
+
+    if (!channels || !Array.isArray(channels)) {
+      throw new Error("Channels not found");
+    }
+
+    console.log(`📺 Total Channels: ${channels.length}`);
 
     let m3u = "#EXTM3U\n";
 
-    channels.data.js.data.forEach((ch) => {
-      m3u += `#EXTINF:-1 tvg-id="${ch.id}" tvg-name="${ch.name}",${ch.name}\n`;
-      m3u += `${config.host}/play/live.php?mac=${config.mac}&stream=${ch.cmd}\n`;
+    channels.forEach((ch) => {
+      if (!ch.cmd || !ch.name) return;
+
+      let stream = ch.cmd;
+
+      // remove ffmpeg prefix
+      if (stream.startsWith("ffmpeg ")) {
+        stream = stream.replace("ffmpeg ", "");
+      }
+
+      m3u += `#EXTINF:-1 tvg-id="${ch.id || ""}" group-title="IPTV",${ch.name}\n`;
+      m3u += `${stream}\n`;
     });
 
     res.setHeader("Content-Type", "text/plain");
     res.send(m3u);
 
   } catch (err) {
-    console.log(err.response?.data || err.message);
-    res.send("❌ Error generating playlist");
+    console.log("❌ ERROR:", err.response?.data || err.message);
+
+    res.send(`
+❌ Error generating playlist
+
+Possible reasons:
+- MAC invalid / expired
+- Portal blocked
+- ISP restriction
+`);
   }
 });
 
-// ===== START SERVER =====
+// ===== START =====
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
