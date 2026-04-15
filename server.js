@@ -7,11 +7,11 @@ const PORT = process.env.PORT || 3000;
 
 // ===== CONFIG =====
 const config = {
-  host: "http://portal.airtel4k.co",
-  mac: "00:1A:79:00:2D:6A",
-  serial: "7D051746180ABD8E70AA3C6E23ADBC8D",
-  device1: "FC21220582688",
-  device2: "5D41402ABC4B2A76B9719D911017C592"
+  host: "http://4k.spicetv.cc/stalker_portal/c/",
+  mac: "00:1A:79:00:2C:D8",
+  serial: "061A842DFD8AA25AA9184BAB968565D2E8831804C89956DA707F8396F7D4BBDB",
+  device1: "61A63207AA03F",
+  device2: "061A842DFD8AA25AA9184BAB968565D2E8831804C89956DA707F8396F7D4BBDB"
 };
 
 // ===== SIGNATURE GENERATOR =====
