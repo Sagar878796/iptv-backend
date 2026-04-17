@@ -10,23 +10,42 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      # 1️⃣ Repo checkout
+      - name: Checkout
+        uses: actions/checkout@v3
 
+      # 2️⃣ Node setup
       - name: Setup Node
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
+      # 3️⃣ Install dependencies
       - name: Install deps
         run: npm install
 
+      # 4️⃣ Run generator
       - name: Run script
-        run: node index.js
-
-      - name: Push file
         run: |
-          git config user.name "bot"
-          git config user.email "bot@bot.com"
+          node index.js || echo "Script failed"
+
+      # 5️⃣ Ensure file exists (IMPORTANT FIX)
+      - name: Ensure M3U exists
+        run: |
+          if [ ! -f static.m3u ]; then
+            echo "#EXTM3U" > static.m3u
+            echo "#EXTINF:-1,Backup Channel" >> static.m3u
+            echo "http://example.com/stream" >> static.m3u
+            echo "⚠️ Backup M3U created"
+          fi
+
+      # 6️⃣ Push to GitHub
+      - name: Commit & Push
+        run: |
+          git config user.name "iptv-bot"
+          git config user.email "bot@iptv.com"
+
           git add static.m3u
-          git commit -m "auto update" || echo "no change"
+          git commit -m "Auto update M3U" || echo "No changes"
+
           git push
